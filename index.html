@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verificación de certificados · RECVAP USA</title>
+<meta name="robots" content="noindex">
+<style>
+  :root { --navy:#14248A; --cyan:#1BA3E0; --ink:#1E2533; --gray:#5B6475; --ok:#0E8A4F; --warn:#B7791F; --bad:#C53030; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink);
+         background:linear-gradient(180deg,#EEF6FC 0,#fff 320px); min-height:100vh; }
+  header { background:var(--navy); color:#fff; padding:18px 20px; border-bottom:4px solid var(--cyan); }
+  header .in { max-width:720px; margin:auto; display:flex; align-items:center; gap:14px; }
+  header b { font-size:20px; letter-spacing:.5px; } header span { opacity:.8; font-size:14px; }
+  main { max-width:720px; margin:28px auto; padding:0 20px; }
+  h1 { font-size:22px; color:var(--navy); margin:0 0 6px; }
+  p.lead { color:var(--gray); margin:0 0 18px; }
+  form { display:flex; gap:10px; flex-wrap:wrap; }
+  input { flex:1; min-width:200px; font-size:20px; letter-spacing:3px; text-transform:uppercase; padding:12px 14px;
+          border:1.5px solid #C9DDEE; border-radius:8px; font-family:ui-monospace, Menlo, Consolas, monospace; }
+  input:focus { outline:none; border-color:var(--cyan); }
+  button { background:var(--navy); color:#fff; border:0; border-radius:8px; padding:12px 22px; font-size:16px; cursor:pointer; }
+  .card { margin-top:24px; border-radius:12px; border:1.5px solid #DCE6F0; background:#fff; overflow:hidden; display:none; }
+  .status { padding:16px 20px; color:#fff; font-weight:700; font-size:18px; display:flex; gap:10px; align-items:center; }
+  .ok .status { background:var(--ok); } .warn .status { background:var(--warn); } .bad .status { background:var(--bad); }
+  dl { margin:0; padding:8px 20px 18px; display:grid; grid-template-columns:170px 1fr; gap:10px 14px; }
+  dt { color:var(--gray); font-size:13px; text-transform:uppercase; letter-spacing:.6px; padding-top:2px; }
+  dd { margin:0; font-weight:600; }
+  .msg { padding:14px 20px 18px; color:var(--gray); }
+  footer { max-width:720px; margin:30px auto; padding:0 20px 30px; color:var(--gray); font-size:13px; }
+  @media (max-width:520px){ dl { grid-template-columns:1fr; gap:2px; } dd { margin-bottom:10px; } }
+</style>
+</head>
+<body>
+<header><div class="in"><b>RECVAP USA</b><span>Verificación de certificados de instalador</span></div></header>
+<main>
+  <h1>Verificar certificado RV-100</h1>
+  <p class="lead">Escriba el código de verificación de 8 caracteres impreso en el certificado (por ejemplo <code>FDN6-TPP8</code>), o escanee el código QR del documento.</p>
+  <form id="f"><input id="c" maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" aria-label="Código de verificación"><button>Verificar</button></form>
+  <div class="card" id="r"></div>
+</main>
+<footer>
+  ¿Dudas sobre un certificado o un instalador? Contacte a RECVAP USA, LLC:
+  <span id="contacto"><a href="mailto:jpinero@recvapusa.com">jpinero@recvapusa.com</a> · <a href="https://wa.me/524441348594">WhatsApp +52 444 134 8594</a></span>
+</footer>
+<script src="registro.js"></script>
+<script>
+  const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  const larga = iso => { if(!iso) return "Indefinida"; const [y,m,d] = iso.split("-").map(Number); return `${d} de ${MESES[m-1]} de ${y}`; };
+  const limpia = s => (s||"").toUpperCase().replace(/[^0-9A-Z]/g,"");
+  const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
+  const R = window.REGISTRO || {};
+  const box = document.getElementById("r"), inp = document.getElementById("c");
+
+  async function buscar(code){
+    const enc = new TextEncoder();
+    const base = await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveBits"]);
+    const dk = new Uint8Array(await crypto.subtle.deriveBits(
+      {name:"PBKDF2", hash:"SHA-256", salt:enc.encode("RECVAP-RV100"), iterations:100000}, base, 512));
+    const rid = [...dk.slice(0,16)].map(b => b.toString(16).padStart(2,"0")).join("");
+    const blob = R[rid]; if(!blob) return null;
+    const ct = Uint8Array.from(atob(blob), ch => ch.charCodeAt(0));
+    const k = await crypto.subtle.importKey("raw", dk.slice(32), {name:"HMAC", hash:"SHA-256"}, false, ["sign"]);
+    const pt = new Uint8Array(ct.length);
+    for(let i=0; i*32 < ct.length; i++){
+      const ctr = new Uint8Array(4); new DataView(ctr.buffer).setUint32(0, i);
+      const ks = new Uint8Array(await crypto.subtle.sign("HMAC", k, ctr));
+      for(let j=0; j<32 && i*32+j < ct.length; j++) pt[i*32+j] = ct[i*32+j] ^ ks[j];
+    }
+    try { return JSON.parse(new TextDecoder().decode(pt)); } catch(e){ return null; }
+  }
+
+  async function verificar(code){
+    code = limpia(code);
+    if(!code){ box.style.display="none"; return; }
+    inp.value = code.length > 4 ? code.slice(0,4)+"-"+code.slice(4) : code;
+    box.className = "card"; box.innerHTML = '<div class="msg">Verificando…</div>'; box.style.display = "block";
+    const c = await buscar(code);
+    let cls, titulo, cuerpo;
+    if(!c){
+      cls="bad"; titulo="✕ Código no encontrado";
+      cuerpo = `<div class="msg">No existe un certificado emitido por RECVAP USA con este código. Revise que lo haya escrito correctamente; si persiste, el documento podría no ser auténtico. Contáctenos para confirmarlo.</div>`;
+    } else {
+      const hoy = new Date().toISOString().slice(0,10);
+      if(c.estado === "revocado"){ cls="bad"; titulo="✕ Certificado revocado"; }
+      else if(c.vence && c.vence < hoy){ cls="warn"; titulo="! Certificado auténtico — vigencia vencida"; }
+      else { cls="ok"; titulo="✓ Certificado auténtico y vigente"; }
+      cuerpo = `<dl>
+        <dt>Nombre</dt><dd>${esc(c.nombre)}</dd>
+        <dt>Empresa</dt><dd>${esc(c.empresa)}</dd>
+        <dt>Folio</dt><dd>${esc(c.folio)}</dd>
+        <dt>Capacitación</dt><dd>${esc(c.curso)}</dd>
+        <dt>Fecha</dt><dd>${larga(c.fecha)}</dd>
+        <dt>Vigente hasta</dt><dd>${larga(c.vence)}</dd>
+      </dl>`;
+    }
+    box.className = "card " + cls;
+    box.innerHTML = `<div class="status">${titulo}</div>${cuerpo}`;
+    box.style.display = "block";
+  }
+  document.getElementById("f").addEventListener("submit", e => { e.preventDefault(); verificar(inp.value); });
+  const q = new URLSearchParams(location.search).get("c");
+  if(q) verificar(q);
+</script>
+</body>
+</html>
