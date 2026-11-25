@@ -88,7 +88,7 @@
       else { cls="ok"; titulo="✓ Certificado auténtico y vigente"; }
       cuerpo = `<dl>
         <dt>Nombre</dt><dd>${esc(c.nombre)}</dd>
-        <dt>Empresa</dt><dd>${esc(c.empresa)}</dd>
+        ${c.empresa ? `<dt>Empresa</dt><dd>${esc(c.empresa)}</dd>` : ""}
         <dt>Folio</dt><dd>${esc(c.folio)}</dd>
         <dt>Capacitación</dt><dd>${esc(c.curso)}</dd>
         <dt>Fecha</dt><dd>${larga(c.fecha)}</dd>
