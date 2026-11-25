@@ -90,6 +90,7 @@
         <dt>Nombre</dt><dd>${esc(c.nombre)}</dd>
         ${c.empresa ? `<dt>Empresa</dt><dd>${esc(c.empresa)}</dd>` : ""}
         <dt>Folio</dt><dd>${esc(c.folio)}</dd>
+        ${c.tipo ? `<dt>Certificación</dt><dd>${esc(c.tipo)}</dd>` : ""}
         <dt>Capacitación</dt><dd>${esc(c.curso)}</dd>
         <dt>Fecha</dt><dd>${larga(c.fecha)}</dd>
         <dt>Vigente hasta</dt><dd>${larga(c.vence)}</dd>
